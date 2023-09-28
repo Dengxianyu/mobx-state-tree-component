@@ -1,7 +1,7 @@
 /**
  * @desc: mst 使用时可能有一些不方便的需要二次改造一下再在业务中使用
  */
-import { IAnyComplexType, IAnyModelType, IAnyType, Instance, getType, types } from "mobx-state-tree"
+import { IAnyComplexType, IAnyModelType, IAnyType, Instance, SnapshotIn, getType, isStateTreeNode, types } from "mobx-state-tree"
 import { AnyObj, Expand, ValueOf } from "../types/helper"
 import React, { createContext, useContext, useState } from "react"
 import { useLocalObservable } from "mobx-react-lite"
@@ -50,26 +50,84 @@ export const useScopeInstance = <ScopeModel extends IAnyModelType>(scopeModel: S
  * - 原因是业务中想以原子的形式使用 MST，但是 MST 的 reference 功能需要实例是定义在一个 Model 下
  * - 而业务上不想维护一个 rootModel，所以替换 Model.create 方法使用此方法挂载一个 rootModel
  */
-export const useMSTInstance = (() => {
-  const RootModel = types.model({
-    rootState: types.map(types.model({
-      id: types.identifier,
-      instance: types.frozen()
-    }))
-  }).actions((self) => ({
-    addState(instance: IAnyType, id: string) {
-      self.rootState.put({ id, instance })
-    }
-  }))
-  const rootModel = RootModel.create();
+// export const createMSTInstance = (() => {
+//   const RootModel = types.model({
+//     rootState: types.map(types.model({
+//       id: types.identifier,
+//       instance: types.frozen()
+//     }))
+//   }).actions((self) => ({
+//     addState(instance: IAnyType, id: string) {
+//       self.rootState.put({ id, instance })
+//     }
+//   }))
+//   const rootModel = RootModel.create();
 
-  type ScopeProviderType = React.FC<{ children: React.ReactNode; }>;
+//   type ScopeProviderType = React.FC<{ children: React.ReactNode; }>;
+//   const singletonModelAndProviderMap = new WeakMap<IAnyModelType, ScopeProviderType>()
+//   const singletonModelAndInstanceMap = new WeakMap<IAnyModelType, IAnyType>()
+
+//   return <ModelType extends IAnyModelType>(
+//     model: ModelType, 
+//     value: SnapshotIn<ModelType>, 
+//     { 
+//       isSingleton = false
+//     }: {
+//       isSingleton: boolean,
+//     } = {
+//       isSingleton: false
+//     }
+//   ) => {
+//     const providerFromMap = singletonModelAndProviderMap.get(model);
+//     const instanceFromMap = singletonModelAndInstanceMap.get(model);
+    
+//     if (isSingleton && instanceFromMap && providerFromMap) {
+//       return [instanceFromMap as Instance<ModelType>, providerFromMap]
+//     }
+    
+//     // 兼容 instance 是在其父级 Model 下创建的，所以后续直接传 instance 给到子组件，这时候没必要再创建一个新的
+//     const isMstInstance = isStateTreeNode(value);
+//     let instance: Instance<ModelType>;
+//     if(!isMstInstance) {
+//       instance = model.create(value);
+//       const uniqId = nanoid();
+//       rootModel.addState(instance, uniqId);
+//     } else {
+//       instance = value
+//     }
+
+//     const MstScopeProvider = (
+//       {children}: {
+//         children: React.ReactNode;
+//       }
+//     ) => {
+//       const parentContext = useContext(MstContext)
+//       // 放在 useState 函数里让 newContextMap 的值只计算一次，从而让 Provider value 的值不会一直改变
+//       const [newContextMap] = useState(() => {
+//         const map = new Map(Array.from(parentContext.entries())) as Map<ModelType, Instance<ModelType>>;
+//         map.set(model, instance);
+//         return map;
+//       })
+//       return <MstContext.Provider value={ newContextMap }>{ children }</MstContext.Provider>
+//     }
+
+//     if (isSingleton) {
+//       singletonModelAndProviderMap.set(model, MstScopeProvider)
+//       singletonModelAndInstanceMap.set(model, instance)
+//     }
+
+//     return { instance, MstScopeProvider }
+//   }
+// })()
+
+export const createMSTInstanceWithProvider = (() => {
+  type ScopeProviderType = ({ children }: { children: React.ReactNode; }) => JSX.Element;
   const singletonModelAndProviderMap = new WeakMap<IAnyModelType, ScopeProviderType>()
   const singletonModelAndInstanceMap = new WeakMap<IAnyModelType, IAnyType>()
 
   return <ModelType extends IAnyModelType>(
     model: ModelType, 
-    value: Parameters<ModelType['create']>[0], 
+    value: SnapshotIn<ModelType>, 
     { 
       isSingleton = false
     }: {
@@ -77,16 +135,22 @@ export const useMSTInstance = (() => {
     } = {
       isSingleton: false
     }
-  ): [Instance<ModelType>, ScopeProviderType] => {
+  ) => {
     const providerFromMap = singletonModelAndProviderMap.get(model);
     const instanceFromMap = singletonModelAndInstanceMap.get(model);
+    
     if (isSingleton && instanceFromMap && providerFromMap) {
-      return [instanceFromMap as Instance<ModelType>, providerFromMap]
+      return { instance: instanceFromMap as Instance<ModelType>, MstScopeProvider: providerFromMap }
     }
-
-    const instance = model.create(value);
-    const uniqId = nanoid();
-    rootModel.addState(instance, uniqId);
+    
+    // 兼容 instance 是在其父级 Model 下创建的，所以后续直接传 instance 给到子组件，这时候没必要再创建一个新的
+    const isMstInstance = isStateTreeNode(value);
+    let instance: Instance<ModelType>;
+    if(!isMstInstance) {
+      instance = model.create(value);
+    } else {
+      instance = value
+    }
 
     const MstScopeProvider = (
       {children}: {
@@ -108,6 +172,7 @@ export const useMSTInstance = (() => {
       singletonModelAndInstanceMap.set(model, instance)
     }
 
-    return [instance, MstScopeProvider]
+    return { instance, MstScopeProvider }
   }
 })()
+
