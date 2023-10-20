@@ -10,6 +10,7 @@
     "@types/node": "^16.18.50",
     "@types/react": "^18.2.21",
     "@types/react-dom": "^18.2.7",
+    "antd": "^5.10.0",
     "mobx-react-lite": "^4.0.4",
     "mobx-state-tree": "^5.1.8",
     "nanoid": "^5.0.1",
@@ -42,5 +43,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "diff2html": "^3.4.45",
+    "simple-git": "^3.20.0"
   }
 }
